@@ -1,0 +1,39 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-a309816fb699f90c66908a85ae8c42d520490974",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "userSourceNameMap": {
+    "contracts/ERC721.sol": "project/contracts/ERC721.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/ERC721.sol": {
+        "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract SimpleNFT {\n    string public name;\n    string public symbol;\n    uint256 private _tokenIds;\n\n    mapping(uint256 => address) private _owners;\n    mapping(address => uint256) private _balances;\n    mapping(uint256 => address) private _tokenApprovals;\n    mapping(address => mapping(address => bool)) private _operatorApprovals;\n    mapping(uint256 => string) private _tokenURIs;\n\n    event Transfer(\n        address indexed from,\n        address indexed to,\n        uint256 indexed tokenId\n    );\n    event Approval(\n        address indexed owner,\n        address indexed approved,\n        uint256 indexed tokenId\n    );\n    event ApprovalForAll(\n        address indexed owner,\n        address indexed operator,\n        bool approved\n    );\n\n    constructor(string memory _name, string memory _symbol) {\n        name = _name;\n        symbol = _symbol;\n    }\n\n    function balanceOf(address owner) public view returns (uint256) {\n        require(owner != address(0), \"Zero address not valid\");\n        return _balances[owner];\n    }\n\n    function ownerOf(uint256 tokenId) public view returns (address) {\n        address owner = _owners[tokenId];\n        require(owner != address(0), \"Token does not exist\");\n        return owner;\n    }\n\n    function approve(address to, uint256 tokenId) public {\n        address owner = ownerOf(tokenId);\n        require(\n            msg.sender == owner || isApprovedForAll(owner, msg.sender),\n            \"Not authorized\"\n        );\n        _tokenApprovals[tokenId] = to;\n        emit Approval(owner, to, tokenId);\n    }\n\n    function getApproved(uint256 tokenId) public view returns (address) {\n        require(_owners[tokenId] != address(0), \"Token does not exist\");\n        return _tokenApprovals[tokenId];\n    }\n\n    function setApprovalForAll(address operator, bool approved) public {\n        _operatorApprovals[msg.sender][operator] = approved;\n        emit ApprovalForAll(msg.sender, operator, approved);\n    }\n\n    function isApprovedForAll(\n        address owner,\n        address operator\n    ) public view returns (bool) {\n        return _operatorApprovals[owner][operator];\n    }\n\n    function transferFrom(address from, address to, uint256 tokenId) public {\n        address owner = ownerOf(tokenId);\n        require(\n            msg.sender == owner ||\n                msg.sender == getApproved(tokenId) ||\n                isApprovedForAll(owner, msg.sender),\n            \"Not authorized\"\n        );\n        require(from == owner, \"Incorrect owner\");\n        require(to != address(0), \"Cannot transfer to zero address\");\n\n        _tokenApprovals[tokenId] = address(0);\n\n        _balances[from] -= 1;\n        _balances[to] += 1;\n        _owners[tokenId] = to;\n\n        emit Transfer(from, to, tokenId);\n    }\n\n    function mint(address to, string memory uri) public returns (uint256) {\n        require(to != address(0), \"Cannot mint to zero address\");\n        _tokenIds += 1;\n        uint256 newTokenId = _tokenIds;\n\n        _owners[newTokenId] = to;\n        _balances[to] += 1;\n        _tokenURIs[newTokenId] = uri; // <-- set URI\n\n        emit Transfer(address(0), to, newTokenId);\n        return newTokenId;\n    }\n\n    function tokenURI(uint256 tokenId) public view returns (string memory) {\n        require(_owners[tokenId] != address(0), \"Token does not exist\");\n        return _tokenURIs[tokenId];\n    }\n}\n"
+      }
+    }
+  }
+}
