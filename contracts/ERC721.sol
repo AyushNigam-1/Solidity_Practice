@@ -1,4 +1,3 @@
-// // SPDX-License-Identifier: MIT
 // pragma solidity ^0.8.20;
 
 // contract SimpleNFT {
@@ -122,7 +121,7 @@ contract MyOpenNFT is ERC721URIStorage, Ownable {
     constructor(
         string memory name_,
         string memory symbol_
-    ) ERC721(name_, symbol_) {}
+    ) ERC721(name_, symbol_) Ownable(msg.sender) {}
 
     function mintNFT(
         address to,
