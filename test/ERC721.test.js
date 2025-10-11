@@ -30,7 +30,7 @@ describe("MyNFT Contract", function () {
         // Non-owner tries to mint → should revert
         await expect(
             nft.connect(user1).mintNFT(user2.address, "ipfs://token2")
-        ).to.be.revert(ethers); // ✅ latest syntax
+        ).to.be.revert(ethers);
 
     });
 
