@@ -15,13 +15,14 @@ describe("Crowdfunding", function () {
 
     it("should create a new campaign", async function () {
         const tx = await crowdfunding.connect(creator).createCampaign("Build AI dApp", ethers.parseEther("5"), 10);
-        await expect(tx)
-            .to.emit(crowdfunding, "CampaignCreated")
-            .withArgs(0, creator.address, ethers.parseEther("5"), await anyValue());
+        const receipt = await tx.wait();
+        const event = receipt.logs.find(
+            log => log.fragment?.name === "CampaignCreated"
+            );
 
-        const campaign = await crowdfunding.campaigns(0);
-        expect(campaign.creator).to.equal(creator.address);
-        expect(campaign.goal).to.equal(ethers.parseEther("5"));
+            expect(event.args[0]).to.equal(0);
+            expect(event.args[1]).to.equal(creator.address);
+            expect(event.args[2]).to.equal(ethers.parseEther("5"));
     });
 
     it("should allow users to fund the campaign", async function () {

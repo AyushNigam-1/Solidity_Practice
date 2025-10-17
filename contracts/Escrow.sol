@@ -2,11 +2,11 @@
 pragma solidity ^0.8.20;
 
 contract Escrow {
+
     enum State {
-        AWAITING_PAYMENT,
-        AWAITING_DELIVERY,
-        COMPLETE,
-        REFUNDED
+        AWAITING_DELIVERY, 
+        COMPLETE,          
+        REFUNDED           
     }
 
     struct Deal {
@@ -16,29 +16,57 @@ contract Escrow {
         uint amount;
         State state;
     }
-
+    
     uint public dealCount;
     mapping(uint => Deal) public deals;
 
     event DealCreated(
-        uint dealId,
-        address buyer,
+        uint indexed dealId,
+        address indexed buyer,
         address seller,
         address arbiter,
         uint amount
     );
-    event PaymentDeposited(uint dealId, uint amount);
-    event DeliveryConfirmed(uint dealId);
-    event Refunded(uint dealId);
+    event FundsReleased(uint indexed dealId, address indexed recipient, uint amount);
+    event RefundProcessed(uint indexed dealId, address indexed recipient, uint amount);
 
-    function createDeal(address _seller, address _arbiter) external payable {
-        require(msg.value > 0, "Payment required");
+    // --- Modifiers for Reusable Access Control ---
+
+    modifier onlyBuyer(uint _dealId) {
+        require(msg.sender == deals[_dealId].buyer, "Only buyer can perform this action");
+        _;
+    }
+
+    modifier onlyBuyerOrArbiter(uint _dealId) {
+        Deal storage deal = deals[_dealId];
         require(
-            _seller != address(0) && _arbiter != address(0),
-            "Invalid addresses"
+            msg.sender == deal.buyer || msg.sender == deal.arbiter,
+            "Only buyer or arbiter can perform this action"
         );
+        _;
+    }
 
-        dealCount++;
+    modifier inState(uint _dealId, State _expectedState) {
+        require(deals[_dealId].state == _expectedState, "Deal is not in the correct state");
+        _;
+    }
+
+    // --- Core Functions ---
+
+    /**
+     * @dev Creates a new escrow deal. Funds are deposited immediately.
+     * @param _seller The address that will receive funds upon completion.
+     * @param _arbiter The address authorized to approve refunds.
+     */
+    function createDeal(address _seller, address _arbiter) external payable {
+        require(msg.value > 0, "Payment required to create a deal");
+        require(_seller != address(0) && _arbiter != address(0), "Invalid addresses provided");
+
+        // Use unchecked for efficient counter increment (safe from overflow).
+        unchecked {
+            dealCount++;
+        }
+
         deals[dealCount] = Deal({
             buyer: msg.sender,
             seller: _seller,
@@ -50,28 +78,41 @@ contract Escrow {
         emit DealCreated(dealCount, msg.sender, _seller, _arbiter, msg.value);
     }
 
-    function confirmDelivery(uint _dealId) external {
+    /**
+     * @dev Confirms successful delivery, releases funds to the seller.
+     * @param _dealId The ID of the deal to complete.
+     */
+    function confirmDelivery(uint _dealId) 
+        external
+        onlyBuyer(_dealId)
+        inState(_dealId, State.AWAITING_DELIVERY)
+    {
         Deal storage deal = deals[_dealId];
-        require(msg.sender == deal.buyer, "Only buyer can confirm");
-        require(deal.state == State.AWAITING_DELIVERY, "Not awaiting delivery");
-
         deal.state = State.COMPLETE;
-        payable(deal.seller).transfer(deal.amount);
 
-        emit DeliveryConfirmed(_dealId);
+        // Use .call{} for safe Ether transfer and full gas usage (recommended over .transfer)
+        (bool success, ) = payable(deal.seller).call{value: deal.amount}("");
+        require(success, "Ether transfer failed");
+
+        emit FundsReleased(_dealId, deal.seller, deal.amount);
     }
 
-    function refund(uint _dealId) external {
+    /**
+     * @dev Refunds the deposited amount to the buyer. Can only be called by the buyer or arbiter.
+     * @param _dealId The ID of the deal to refund.
+     */
+    function refund(uint _dealId) 
+        external
+        onlyBuyerOrArbiter(_dealId)
+        inState(_dealId, State.AWAITING_DELIVERY)
+    {
         Deal storage deal = deals[_dealId];
-        require(
-            msg.sender == deal.buyer || msg.sender == deal.arbiter,
-            "Only buyer or arbiter can refund"
-        );
-        require(deal.state == State.AWAITING_DELIVERY, "Refund not allowed");
-
         deal.state = State.REFUNDED;
-        payable(deal.buyer).transfer(deal.amount);
 
-        emit Refunded(_dealId);
+        // Use .call{} for safe Ether transfer
+        (bool success, ) = payable(deal.buyer).call{value: deal.amount}("");
+        require(success, "Ether transfer failed");
+
+        emit RefundProcessed(_dealId, deal.buyer, deal.amount);
     }
 }
