@@ -2,55 +2,47 @@
 pragma solidity ^0.8.20;
 
 contract Subscription {
-    struct Plan {
-        uint amount; // amount per period
-        uint period; // seconds between payments
-    }
-
     struct Subscriber {
-        uint nextPayment; // timestamp of next payment due
+        uint64 nextPayment; // smaller type to reduce storage
         bool active;
     }
 
-    address public provider;
-    Plan public plan;
+    address payable public immutable provider;
+    uint96 public immutable amount; // smaller type, fits most use cases
+    uint32 public immutable period; // seconds per period, small range
+
     mapping(address => Subscriber) public subscribers;
 
-    event Subscribed(address indexed user, uint nextPayment);
-    event Payment(address indexed user, uint amount, uint date);
+    event Subscribed(address indexed user, uint64 nextPayment);
+    event Payment(address indexed user, uint96 amount, uint64 date);
     event Canceled(address indexed user);
 
-    modifier onlyProvider() {
-        require(msg.sender == provider, "Not provider");
-        _;
-    }
-
-    constructor(uint _amount, uint _period) {
-        require(_amount > 0, "Invalid amount");
-        require(_period > 0, "Invalid period");
-        provider = msg.sender;
-        plan = Plan(_amount, _period);
+    constructor(uint96 _amount, uint32 _period) payable {
+        require(_amount > 0 && _period > 0, "Invalid params");
+        provider = payable(msg.sender);
+        amount = _amount;
+        period = _period;
     }
 
     function subscribe() external payable {
-        require(msg.value == plan.amount, "Must pay exact amount");
+        require(msg.value == amount, "Incorrect payment");
         Subscriber storage sub = subscribers[msg.sender];
         sub.active = true;
-        sub.nextPayment = block.timestamp + plan.period;
+        sub.nextPayment = uint64(block.timestamp + period);
 
         emit Subscribed(msg.sender, sub.nextPayment);
     }
 
     function pay() external payable {
         Subscriber storage sub = subscribers[msg.sender];
-        require(sub.active, "Not subscribed");
+        require(sub.active, "Not active");
         require(block.timestamp >= sub.nextPayment, "Not due yet");
-        require(msg.value == plan.amount, "Incorrect payment");
+        require(msg.value == amount, "Incorrect amount");
 
-        sub.nextPayment = block.timestamp + plan.period;
-        payable(provider).transfer(msg.value);
+        sub.nextPayment = uint64(block.timestamp + period);
+        provider.transfer(msg.value);
 
-        emit Payment(msg.sender, msg.value, block.timestamp);
+        emit Payment(msg.sender, amount, uint64(block.timestamp));
     }
 
     function cancel() external {
